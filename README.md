@@ -19,7 +19,9 @@
 - **契约问题一次反馈**：未定义引用、重复类型名/字段/标签、无保护别名环、
   不合法标识、超过 24 个类型等，一次性全部返回。
 - **结论冻结**：相同 `audit_id` 重传相同契约读取原结论（`frozen_at` 不变）；
-  改变任一契约返回 `409` 且绝不改写原结论。
+  改变任一契约返回 `409` 且绝不改写原结论。协归裁决按审计隔离，不同审计标识
+  的同名递归契约互不影响；修复部署前被旧版本误判并冻结的记录，会在按标识
+  重开或相同契约重传时按其冻结原始契约恢复正确结论（标识/指纹/冻结时间保留）。
 
 ## 类型模型（JSON）
 
@@ -45,6 +47,20 @@ curl -s http://localhost:18080/health      # {"status":"ok"}
 ```
 
 结论持久化在命名卷 `audit-data`，容器重启后仍可按标识重开。
+
+## 端到端验收（Compose）
+
+`scripts/acceptance.sh` 构建镜像、启动 `web` 并确认 `/health` 后，通过
+**真实审计 API** 连续提交两份同名递归拓扑的独立审计（先兼容、后不兼容），
+核对第二份稳定拒绝且首个违约为 `primitive-mismatch @ Cmd.payload[Data].seq`，
+并覆盖相反提交顺序、相同契约重传、按标识重开、不同契约 `409`；
+还会预置修复部署前被错误冻结的旧记录，验证按标识重开/相同契约重传时按其
+**冻结原始契约**恢复正确结论（保留审计标识、契约指纹、`frozen_at`），
+随后重启服务复核持久化，最后运行 `verify`（pytest 与构建检查）。
+
+```bash
+HOST_PORT=18080 ./scripts/acceptance.sh      # 退出码 0 即全部通过
+```
 
 ## 单次验收组件 verify
 
@@ -96,4 +112,6 @@ AUDIT_DATA_DIR=./data PORT=8080 .venv/bin/python -m app.main
 - `app/api.py`, `app/main.py` — HTTP API 与入口
 - `app/static/` — 提交与重开页面（真实 API）
 - `scripts/verify.py` — 单次验收组件
-- `tests/` — 34 项测试（递归、互递归、稳定性、冻结、API）
+- `scripts/acceptance.sh`, `scripts/acceptance_checks.py`, `scripts/seed_legacy.py`
+  — Compose 端到端验收（真实 API、旧冻结记录修复、重启持久化）
+- `tests/` — 44 项测试（递归、互递归、稳定性、冻结/修复、审计隔离、API）

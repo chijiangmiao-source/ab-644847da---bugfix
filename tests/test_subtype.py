@@ -216,3 +216,38 @@ def test_recycled_pair_not_reported_on_failed_assumption_branch():
     assert not compatible
     assert mismatch.path == "R.q"
     assert all("Inner <= Inner" not in e.pair for e in recycled)
+
+
+# ---------- 协归裁决在不同契约（审计）间严格隔离 ----------
+
+def _payload_decls(seq_type):
+    # Cmd{payload: Payload}; Payload = variant{Data}; Data = record{seq, next: Data?}
+    return [
+        N("Cmd", rec(F("payload", ref("Payload")))),
+        N("Payload", var(G("Data", ref("Data")))),
+        N("Data", rec(F("seq", seq_type), F("next", ref("Data"), required=False))),
+    ]
+
+
+def test_recursive_verdicts_isolated_between_contracts():
+    # 同进程中先裁决一份兼容契约，再裁决同名同递归拓扑但不兼容的契约：
+    # 比较对键只含类型路径（Cmd <= Cmd、Data <= Data），两次裁决不得互相复用。
+    s = _payload_decls(T("int"))
+    compatible, _, _ = check(s, _payload_decls(T("int")), "Cmd")
+    assert compatible
+
+    compatible, mismatch, _ = check(s, _payload_decls(T("text")), "Cmd")
+    assert not compatible
+    assert mismatch.code == "primitive-mismatch"
+    assert mismatch.path == "Cmd.payload[Data].seq"
+
+
+def test_recursive_verdicts_isolated_reverse_order():
+    # 反向顺序：先不兼容再兼容，后者不得被前者的递归结论反向误拒。
+    s = _payload_decls(T("int"))
+    compatible, _, _ = check(s, _payload_decls(T("text")), "Cmd")
+    assert not compatible
+
+    compatible, mismatch, _ = check(s, _payload_decls(T("int")), "Cmd")
+    assert compatible
+    assert mismatch is None
