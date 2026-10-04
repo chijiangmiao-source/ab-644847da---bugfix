@@ -1,0 +1,37 @@
+services:
+  web:
+    build: .
+    image: payload-audit:latest
+    environment:
+      PORT: "8080"
+      AUDIT_DATA_DIR: /data
+    ports:
+      # 宿主机端口由 HOST_PORT 配置（默认 8080）：
+      #   HOST_PORT=18080 docker compose up -d --build
+      - "${HOST_PORT:-8080}:8080"
+    volumes:
+      - audit-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,os,urllib.request; json.load(urllib.request.urlopen('http://127.0.0.1:%s/health' % os.environ.get('PORT','8080')))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    restart: unless-stopped
+
+  # 单次验收组件：复核递归兼容 -> 测试 -> 构建检查 -> 接口冒烟，以退出码报告。
+  #   docker compose build verify && docker compose run --rm verify
+  verify:
+    image: payload-audit:latest
+    build: .
+    command: ["python", "scripts/verify.py"]
+    working_dir: /srv
+    environment:
+      AUDIT_SMOKE_BASE_URL: http://web:8080
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  audit-data:

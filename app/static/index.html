@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>星载递归载荷兼容审计</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>星载递归载荷兼容审计</h1>
+    <p class="sub">发送端（生产者） ⪯ 接收端（消费者） · 协归结构子类型裁决 · 结论按审计标识冻结</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <div class="row">
+        <label class="grow">
+          稳定审计标识
+          <input id="auditId" type="text" placeholder="如 CMD-AUDIT-2026-001" spellcheck="false" />
+        </label>
+        <label>
+          根类型名（单类型可留空）
+          <input id="rootName" type="text" placeholder="如 Cmd" spellcheck="false" />
+        </label>
+      </div>
+      <div class="row">
+        <button id="loadExample" type="button" class="ghost">载入递归示例</button>
+        <button id="reopenBtn" type="button" class="ghost">按标识重开结论</button>
+      </div>
+    </section>
+
+    <div class="grid">
+      <section class="card">
+        <h2>发送端类型声明（生产者，至多 24 个）</h2>
+        <textarea id="senderTypes" spellcheck="false"></textarea>
+      </section>
+      <section class="card">
+        <h2>接收端类型声明（消费者，至多 24 个）</h2>
+        <textarea id="receiverTypes" spellcheck="false"></textarea>
+      </section>
+    </div>
+
+    <section class="card actions">
+      <button id="submitBtn" type="button">提交审计 / 幂等重传</button>
+      <span id="editorError" class="editor-error"></span>
+    </section>
+
+    <section id="issuesCard" class="card hidden">
+      <h2>契约问题（一次反馈，须全部修正）</h2>
+      <ul id="issuesList"></ul>
+    </section>
+
+    <section id="resultCard" class="card hidden">
+      <h2 id="resultTitle"></h2>
+      <p id="resultMeta" class="meta"></p>
+      <div id="mismatchBox" class="hidden">
+        <h3>首个稳定违约</h3>
+        <table class="kv">
+          <tr><th>类型路径</th><td id="mmPath"></td></tr>
+          <tr><th>违约类别</th><td id="mmCode"></td></tr>
+          <tr><th>说明</th><td id="mmMsg"></td></tr>
+          <tr><th>细节</th><td><pre id="mmDetail"></pre></td></tr>
+        </table>
+      </div>
+      <div id="recycleBox" class="hidden">
+        <h3>递归处已复用的比较对</h3>
+        <table class="kv">
+          <thead><tr><th>复用位置</th><th>比较对（发送 ⪯ 接收）</th><th>首次出现</th></tr></thead>
+          <tbody id="recycleBody"></tbody>
+        </table>
+      </div>
+      <pre id="rawConclusion" class="raw"></pre>
+    </section>
+
+    <section id="conflictCard" class="card hidden conflict">
+      <h2>提交被拒绝：契约冲突</h2>
+      <p id="conflictMsg"></p>
+      <p class="meta">相同审计标识已冻结不同契约；原结论保持不变，可点“按标识重开结论”查看。</p>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
