@@ -20,6 +20,11 @@
   不合法标识、超过 24 个类型等，一次性全部返回。
 - **结论冻结**：相同 `audit_id` 重传相同契约读取原结论（`frozen_at` 不变）；
   改变任一契约返回 `409` 且绝不改写原结论。
+- **审计彼此隔离**：每次裁决使用全新的递归比较对缓存，一份审计的递归裁决
+  绝不影响另一份稳定审计标识下的结论——同名、同递归拓扑但定义不同的契约
+  在全新审计标识下独立裁决。在隔离修复之前被误判冻结的历史记录，按原审计
+  标识重开或以完全相同契约重传时，依据其冻结的原始契约恢复正确结论，
+  同时保留审计标识、契约指纹与冻结时间。
 
 ## 类型模型（JSON）
 
@@ -49,11 +54,22 @@ curl -s http://localhost:18080/health      # {"status":"ok"}
 ## 单次验收组件 verify
 
 `verify` 服务只运行一次并以退出码报告（复核递归兼容/字段缺失/额外变体 →
-pytest → 构建检查 → 审计接口冒烟）：
+pytest → 构建检查 → 审计接口冒烟 → 审计隔离场景）：
 
 ```bash
 docker compose build verify
 docker compose run --rm verify      # 退出码 0 即验收通过
+```
+
+## 端到端验收 acceptance
+
+`scripts/acceptance.sh` 编排完整验收：Compose 构建并启动服务、确认健康后，
+通过真实审计 API 连续提交两份同名递归契约的独立审计（第二份在载荷 `Data`
+序号处要求文本、必须稳定拒绝），覆盖相反提交顺序、相同契约重传、按标识
+重开，随后重启服务复核冻结结论的读取：
+
+```bash
+scripts/acceptance.sh               # 退出码 0 即验收通过
 ```
 
 ## 本地开发
@@ -96,4 +112,5 @@ AUDIT_DATA_DIR=./data PORT=8080 .venv/bin/python -m app.main
 - `app/api.py`, `app/main.py` — HTTP API 与入口
 - `app/static/` — 提交与重开页面（真实 API）
 - `scripts/verify.py` — 单次验收组件
-- `tests/` — 34 项测试（递归、互递归、稳定性、冻结、API）
+- `scripts/acceptance.sh` — 端到端验收（Compose 编排，含服务重启复核）
+- `tests/` — 44 项测试（递归、互递归、稳定性、冻结、审计隔离、API）

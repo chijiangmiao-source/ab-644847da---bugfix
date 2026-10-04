@@ -17,6 +17,10 @@
 - 已定论比较对（_settled，含不相容结论及其首个违约）被再次进入时复用，
   这才是页面上“在递归处标出的已复用比较对”。
 - 字段按接收端声明顺序、标签按发送端声明顺序遍历，首个违约稳定可重放。
+- 审计隔离：比较对缓存的键只是类型路径，同名类型在不同契约中定义可能
+  完全不同，因此缓存只在单次裁决内部有效——每次 check_compatibility 调用
+  都使用全新的缓存，绝不跨审计、跨契约共享，否则一份审计的递归裁决会污染
+  另一份稳定审计标识下的结论。
 """
 from __future__ import annotations
 
@@ -37,16 +41,17 @@ class _Node:
 
 
 class _Checker:
+    """单次裁决的判定器：比较对缓存为实例私有，不跨审计共享。"""
+
     def __init__(
         self,
         sender: dict[str, TypeExpr],
         receiver: dict[str, TypeExpr],
-        settled: ComparisonCache | None = None,
     ):
         self.sender = sender
         self.receiver = receiver
         self._assumed: set[tuple[str, str]] = set()
-        self._settled: ComparisonCache = settled if settled is not None else {}
+        self._settled: ComparisonCache = {}
         self._first_seen: dict[tuple[str, str], str] = {}
         self.events: list[RecyclePoint] = []
 
@@ -195,10 +200,10 @@ def check_compatibility(
     sender_types: list[NamedType],
     receiver_types: list[NamedType],
     root_name: str,
-    settled: ComparisonCache | None = None,
 ) -> tuple[bool, Mismatch | None, list[RecyclePoint]]:
+    """裁决一次审计。每次调用都是独立判定：递归比较对缓存不跨调用共享。"""
     sender = {d.name: d.type for d in sender_types}
     receiver = {d.name: d.type for d in receiver_types}
-    checker = _Checker(sender, receiver, settled)
+    checker = _Checker(sender, receiver)
     ok, mismatch = checker.compatible(root_name, root_name)
     return ok, mismatch, checker.events
